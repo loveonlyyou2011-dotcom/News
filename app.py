@@ -239,5 +239,29 @@ else:
                         </div>
                         """
                         st.markdown(card_html, unsafe_allow_html=True)
+                        
+                        # --- AI 요약 버튼 및 결과 표시 영역 ---
+                        if api_key:
+                            # 기사별 고유 ID 생성 (제목 기반)
+                            article_id = hashlib.md5(item['title'].encode('utf-8')).hexdigest()
+                            session_key = f"ai_summary_{article_id}"
+                            
+                            # 1. 이미 요약을 요청했던 기사라면 파란색 알림창으로 내용 바로 표시
+                            if session_key in st.session_state:
+                                st.info(st.session_state[session_key])
+                            # 2. 아직 요약 전이라면 요약 버튼 표시
+                            else:
+                                if st.button("✨ 이 기사 AI 3줄 요약", key=f"btn_{article_id}", use_container_width=True):
+                                    with st.spinner("원문을 읽고 요약 중입니다..."):
+                                        content = extract_article_text(item['link'])
+                                        if content:
+                                            summary_result = get_ai_summary(content, api_key)
+                                            # 요약 결과를 세션에 저장
+                                            st.session_state[session_key] = summary_result
+                                            st.rerun() # 화면을 즉시 새로고침하여 결과 표시
+                                        else:
+                                            st.warning("🚫 해당 언론사의 보안(크롤링 방지) 설정으로 본문을 가져올 수 없습니다.")
+                        st.write("") # 카드 간 약간의 띄어쓰기 여백 추가
+                        # --------------------------------------
 
 st.markdown("<hr><p style='text-align:center; color:gray; font-size:12px;'>Data provided by Google News RSS. Not for commercial use.</p>", unsafe_allow_html=True)
