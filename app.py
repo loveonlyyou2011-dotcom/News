@@ -156,43 +156,73 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def extract_article_text(url):
-    """강화된 뉴스 본문 추출 (리디렉션 및 크롤링 방지 완벽 우회)"""
+    """강화된 뉴스 본문 추출 (자바스크립트 우회 및 크롬 완벽 위장)"""
     try:
+        # 최신 브라우저로 완벽히 위장하기 위한 강력한 헤더
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer': 'https://news.google.com/'
+            'Referer': 'https://www.google.com/',
+            'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'cross-site',
+            'Upgrade-Insecure-Requests': '1'
         }
         
         session = requests.Session()
         response = session.get(url, headers=headers, timeout=15, allow_redirects=True)
         
-        # 3중 리디렉션 추적 (구글 뉴스 우회용)
+        # 3중 리디렉션 추적 (구글 뉴스 봇 차단 완벽 우회)
         for _ in range(3):
-            if "news.google.com" in response.url or "consent.google.com" in response.url:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                meta = soup.find('meta', attrs={'http-equiv': lambda x: x and x.lower() == 'refresh'})
-                if meta and 'url=' in meta.get('content', '').lower():
-                    next_url = re.split('url=', meta['content'], flags=re.IGNORECASE)[-1].strip("'\" ")
-                    response = session.get(next_url, headers=headers, timeout=10, allow_redirects=True)
-                    continue
+            soup = BeautifulSoup(response.text, 'html.parser')
+            next_url = None
+            
+            # 1. 메타 태그 리프레시 추적
+            meta = soup.find('meta', attrs={'http-equiv': lambda x: x and x.lower() == 'refresh'})
+            if meta and 'url=' in meta.get('content', '').lower():
+                next_url = re.split('url=', meta['content'], flags=re.IGNORECASE)[-1].strip("'\" ")
+                
+            # 2. 자바스크립트 리디렉션 추적 (최근 구글 뉴스에서 자주 사용하는 방식)
+            if not next_url:
+                for script in soup.find_all('script'):
+                    if script.string and 'window.location' in script.string:
+                        match = re.search(r"window\.location\.(?:replace|href)\s*=\s*['\"](.*?)['\"]", script.string)
+                        if match:
+                            next_url = match.group(1)
+                            break
+                            
+            # 3. 구글 뉴스 중간 경유 페이지의 a 태그 추적
+            if not next_url and ("news.google.com" in response.url or "consent.google.com" in response.url):
                 a_tag = soup.find('a', href=True)
                 if a_tag and a_tag['href'].startswith('http'):
-                    response = session.get(a_tag['href'], headers=headers, timeout=10, allow_redirects=True)
-                    continue
-                break
+                    next_url = a_tag['href']
+
+            if next_url:
+                if next_url.startswith('/'):
+                    from urllib.parse import urljoin
+                    next_url = urljoin(response.url, next_url)
+                response = session.get(next_url, headers=headers, timeout=10, allow_redirects=True)
+                continue
             else:
                 break
 
         response.encoding = response.apparent_encoding
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 한국 포털 및 언론사 타겟팅 셀렉터
+        # 불필요한 태그(광고, 스크립트) 사전 제거
+        for bad_tag in soup(["script", "style", "nav", "header", "footer", "div.ad", "figure"]):
+            bad_tag.decompose()
+            
+        # 한국 포털 및 언론사 타겟팅 셀렉터 (셀렉터 대폭 추가)
         target_selectors = [
             ('div', 'dic_area'), ('div', 'articeBody'), ('div', 'newsct_article'), 
             ('div', 'article_view'), ('div', 'news_body'), ('div', 'articleBody'),
-            ('div', 'content_body'), ('article', ''), ('div', 'article-body')
+            ('div', 'content_body'), ('div', 'view_content'), ('div', 'news_end'), 
+            ('div', 'node_body'), ('article', '')
         ]
         
         text_chunks = []
@@ -204,6 +234,7 @@ def extract_article_text(url):
                 if text_chunks:
                     break
         
+        # 최후의 수단: 문서 전체에서 p 태그 긁어오기
         if not text_chunks:
             paragraphs = soup.find_all('p')
             text_chunks = [p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 30]
@@ -211,7 +242,8 @@ def extract_article_text(url):
         final_text = ' '.join(text_chunks)
         final_text = re.sub(r'\s+', ' ', final_text).strip()
         
-        if len(final_text) < 150:
+        # 최소 글자 수 제한 완화 (150자 -> 100자)
+        if len(final_text) < 100:
             return None
             
         return final_text[:3500] 
@@ -308,15 +340,26 @@ with st.sidebar:
         st.session_state.num_kw_inputs = 1
         
     custom_keywords = []
+    # 1. 화면에 입력창 렌더링
     for i in range(st.session_state.num_kw_inputs):
         kw = st.text_input(f"키워드 {i+1}", key=f"kw_input_{i}", placeholder="예: 올림픽, 테슬라, 비트코인")
         if kw.strip() and kw.strip() not in custom_keywords:
             custom_keywords.append(kw.strip())
-                
+            
+    # 2. 동적 빈칸 추가 및 삭제 로직 (항상 끝에 1개의 빈칸만 남기도록 스마트 UI 적용)
     last_kw_val = st.session_state.get(f"kw_input_{st.session_state.num_kw_inputs - 1}", "")
+    
+    # 마지막 칸에 입력이 발생하면 새로운 빈 칸 추가
     if last_kw_val.strip() != "" and st.session_state.num_kw_inputs < 10:
         st.session_state.num_kw_inputs += 1
         st.rerun()
+        
+    # 마지막 칸이 비어있고, 그 위의 칸도 비어있다면 불필요한 빈 칸 삭제
+    if st.session_state.num_kw_inputs > 1 and last_kw_val.strip() == "":
+        second_to_last_val = st.session_state.get(f"kw_input_{st.session_state.num_kw_inputs - 2}", "")
+        if second_to_last_val.strip() == "":
+            st.session_state.num_kw_inputs -= 1
+            st.rerun()
 
 final_topics = list(selected_topics)
 for kw in custom_keywords:
