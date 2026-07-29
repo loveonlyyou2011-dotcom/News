@@ -111,8 +111,8 @@ with st.sidebar:
     
     st.divider()
     
-    # 주제 설정
-    all_topics = ["시사", "정치", "연예", "스포츠", "주식", "IT/과학", "부동산"]
+    # 주제 설정 (에러 수정: all_topics 리스트에 '경제' 추가)
+    all_topics = ["시사", "정치", "경제", "연예", "스포츠", "주식", "IT/과학", "부동산"]
     selected_topics = st.multiselect("표시할 주제 선택", all_topics, default=["시사", "정치", "경제", "연예", "스포츠"])
 
 # 자동 새로고침 적용 (밀리초 단위로 변환)
