@@ -1,8 +1,11 @@
 streamlit
 feedparser
-streamlit-autorefresh
-beautifulsoup4
 requests
+beautifulsoup4
 google-generativeai
+streamlit-autorefresh
 qrcode
-pillow
+Pillow
+newspaper3k
+lxml
+lxml_html_clean
