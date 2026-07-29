@@ -11,45 +11,103 @@ import google.generativeai as genai
 # 페이지 기본 설정
 st.set_page_config(page_title="실시간 뉴스 대시보드", page_icon="📰", layout="wide")
 
-# Padlet 스타일을 위한 커스텀 CSS
+# 모던하고 세련된 UI를 위한 CSS (애니메이션, 그림자, 티커 추가)
 st.markdown("""
 <style>
+    /* 전체 배경색 및 폰트 */
     .stApp {
-        background-color: #f4f5f8;
+        background-color: #F7F9FC;
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
     }
+    
+    /* 상단 그라데이션 타이틀 */
+    .main-title {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 900;
+        font-size: 2.5rem;
+        margin-bottom: 5px;
+    }
+    
+    /* 실시간 뉴스 티커 (전광판) 영역 */
+    .ticker-wrap {
+        width: 100%;
+        background-color: #1e293b;
+        height: 40px;
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        margin-bottom: 25px;
+        display: flex;
+        align-items: center;
+    }
+    .ticker-title {
+        background-color: #ef4444;
+        color: white;
+        font-weight: bold;
+        padding: 0 15px;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        z-index: 10;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+    .ticker-content {
+        white-space: nowrap;
+        animation: ticker 40s linear infinite;
+        padding-left: 100%;
+        color: #f8fafc;
+        font-size: 0.95rem;
+    }
+    @keyframes ticker {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-100%); }
+    }
+    .ticker-content span {
+        margin-right: 50px;
+    }
+    .ticker-content span strong {
+        color: #fbbf24; /* 카테고리 강조색 */
+    }
+
+    /* 패들렛 스타일 뉴스 카드 */
     .news-card {
         background-color: white;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border-radius: 16px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
         margin-bottom: 20px;
-        border: 1px solid #e5e7eb;
-        border-top: 5px solid #4CAF50;
-        transition: transform 0.2s, box-shadow 0.2s;
+        border: 1px solid #e2e8f0;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         overflow: hidden;
         display: flex;
         flex-direction: column;
     }
     .news-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+        transform: translateY(-5px);
+        box-shadow: 0 12px 25px rgba(0,0,0,0.1);
+        border-color: #cbd5e1;
     }
     .news-image {
         width: 100%;
-        height: 150px;
+        height: 160px;
         object-fit: cover;
-        background-color: #f3f4f6;
+        background-color: #f1f5f9;
+        border-bottom: 1px solid #f1f5f9;
     }
     .news-content {
-        padding: 16px;
+        padding: 18px;
         display: flex;
         flex-direction: column;
         flex-grow: 1;
     }
     .news-title {
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 800;
-        color: #111827;
-        margin-bottom: 8px;
+        color: #0f172a;
+        margin-bottom: 10px;
         line-height: 1.4;
     }
     .news-title a {
@@ -58,13 +116,12 @@ st.markdown("""
     }
     .news-title a:hover {
         color: #2563eb;
-        text-decoration: underline;
     }
     .news-summary {
-        font-size: 13px;
-        color: #4b5563;
-        margin-bottom: 12px;
-        line-height: 1.5;
+        font-size: 13.5px;
+        color: #475569;
+        margin-bottom: 15px;
+        line-height: 1.6;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
@@ -72,31 +129,35 @@ st.markdown("""
     }
     .news-meta {
         font-size: 11px;
-        color: #6b7280;
+        color: #94a3b8;
         margin-top: auto;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-top: 1px solid #f3f4f6;
-        padding-top: 10px;
+        border-top: 1px dashed #e2e8f0;
+        padding-top: 12px;
     }
+    
+    /* 뱃지 스타일 컬럼 헤더 */
     .column-header {
-        background-color: #e5e7eb;
-        padding: 10px;
-        border-radius: 8px;
+        background-color: white;
+        padding: 12px;
+        border-radius: 12px;
         text-align: center;
-        font-weight: bold;
-        margin-bottom: 15px;
-        color: #374151;
+        font-weight: 800;
+        font-size: 16px;
+        margin-bottom: 20px;
+        color: #1e293b;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        border: 1px solid #e2e8f0;
+        border-bottom: 4px solid #3b82f6;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- AI 및 크롤링 헬퍼 함수 -----------------
 def extract_article_text(url):
-    """주어진 URL에서 뉴스 본문 텍스트를 추출합니다 (리디렉션 및 크롤링 방지 우회 강화)."""
+    """강화된 뉴스 본문 추출 (리디렉션 및 크롤링 방지 완벽 우회)"""
     try:
-        # 1. 봇 차단을 우회하기 위한 강력한 브라우저 헤더 설정
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -104,71 +165,73 @@ def extract_article_text(url):
             'Referer': 'https://news.google.com/'
         }
         
-        # 세션을 사용하여 리디렉션 및 쿠키 유지
         session = requests.Session()
-        response = session.get(url, headers=headers, timeout=10, allow_redirects=True)
-        response.encoding = response.apparent_encoding # 한글 깨짐 방지
+        response = session.get(url, headers=headers, timeout=15, allow_redirects=True)
         
+        # 3중 리디렉션 추적 (구글 뉴스 우회용)
+        for _ in range(3):
+            if "news.google.com" in response.url or "consent.google.com" in response.url:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                meta = soup.find('meta', attrs={'http-equiv': lambda x: x and x.lower() == 'refresh'})
+                if meta and 'url=' in meta.get('content', '').lower():
+                    next_url = re.split('url=', meta['content'], flags=re.IGNORECASE)[-1].strip("'\" ")
+                    response = session.get(next_url, headers=headers, timeout=10, allow_redirects=True)
+                    continue
+                a_tag = soup.find('a', href=True)
+                if a_tag and a_tag['href'].startswith('http'):
+                    response = session.get(a_tag['href'], headers=headers, timeout=10, allow_redirects=True)
+                    continue
+                break
+            else:
+                break
+
+        response.encoding = response.apparent_encoding
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 2. 구글 뉴스 리디렉션 페이지(메타 태그 자동 이동) 우회 처리
-        meta_refresh = soup.find('meta', attrs={'http-equiv': 'refresh'})
-        if meta_refresh:
-            redirect_url = meta_refresh.get('content', '').split('url=')[-1].strip("'\" ")
-            if redirect_url:
-                response = session.get(redirect_url, headers=headers, timeout=10, allow_redirects=True)
-                response.encoding = response.apparent_encoding
-                soup = BeautifulSoup(response.text, 'html.parser')
+        # 한국 포털 및 언론사 타겟팅 셀렉터
+        target_selectors = [
+            ('div', 'dic_area'), ('div', 'articeBody'), ('div', 'newsct_article'), 
+            ('div', 'article_view'), ('div', 'news_body'), ('div', 'articleBody'),
+            ('div', 'content_body'), ('article', ''), ('div', 'article-body')
+        ]
         
-        # a 태그 리디렉션 우회 (구글 뉴스의 "계속하려면 클릭" 페이지 처리)
-        if "news.google.com" in response.url or "consent.google.com" in response.url:
-            a_tag = soup.find('a', href=True)
-            if a_tag and 'http' in a_tag['href']:
-                response = session.get(a_tag['href'], headers=headers, timeout=10, allow_redirects=True)
-                response.encoding = response.apparent_encoding
-                soup = BeautifulSoup(response.text, 'html.parser')
-
-        # 3. 실제 기사 본문 텍스트 추출 (p 태그 위주)
-        paragraphs = soup.find_all('p')
-        text_chunks = [p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 30]
+        text_chunks = []
+        for tag, name in target_selectors:
+            element = soup.find(tag, id=name) or soup.find(tag, class_=name) if name else soup.find(tag)
+            if element:
+                paragraphs = element.find_all(['p', 'div', 'span'])
+                text_chunks = [p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20]
+                if text_chunks:
+                    break
         
-        # 본문이 p태그가 아닌 div 등에 있는 특이한 언론사를 위한 2차 추출(Fallback)
-        if len(text_chunks) < 3: 
-            article_divs = soup.find_all('div', id=re.compile(r'(article|content|news)', re.I)) or \
-                           soup.find_all('div', class_=re.compile(r'(article|content|news)', re.I))
-            for div in article_divs:
-                text = div.get_text(separator=' ', strip=True)
-                if len(text) > 100:
-                    text_chunks.append(text)
+        if not text_chunks:
+            paragraphs = soup.find_all('p')
+            text_chunks = [p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 30]
 
-        # 문장들을 하나로 합치고 불필요한 공백 제거
         final_text = ' '.join(text_chunks)
-        final_text = re.sub(r'\s+', ' ', final_text) 
+        final_text = re.sub(r'\s+', ' ', final_text).strip()
         
-        # 텍스트가 너무 짧으면(기사를 못 가져왔다면) 실패 처리
         if len(final_text) < 150:
             return None
             
-        return final_text[:3500] # API 토큰 제한 방지 (최대 3500자 반환)
+        return final_text[:3500] 
     except Exception as e:
-        # 에러 발생 시 로그를 남기지 않고 조용히 None 반환
         return None
 
 def get_ai_summary(text, key):
-    """Gemini API를 사용하여 텍스트를 3줄로 요약합니다."""
+    """Gemini API를 통한 3줄 요약 생성"""
     try:
         genai.configure(api_key=key)
         model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = f"다음 뉴스 기사 본문을 읽고, 일반인도 이해하기 쉽게 핵심 내용만 정확하게 3줄로 요약해줘. 각 줄은 불릿기호(-)로 시작하게 해줘:\n\n{text}"
+        prompt = f"다음 뉴스 기사 본문을 읽고, 일반인도 이해하기 쉽게 핵심 내용만 정확하게 3줄로 요약해줘. 각 줄은 이모지 없이 불릿기호(-)로 시작해:\n\n{text}"
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"요약 실패 (API 키 오류 또는 한도 초과): {str(e)}"
-# --------------------------------------------------------
+        return f"요약 실패 (API 키 오류 또는 일일 한도 초과): {str(e)}"
 
 @st.cache_data(ttl=60) 
 def get_news(query, max_items=10):
-    """구글 뉴스 RSS를 통해 해당 키워드의 최신 뉴스를 가져옵니다."""
+    """구글 뉴스 RSS 파싱"""
     url = f"https://news.google.com/rss/search?q={query}&hl=ko&gl=KR&ceid=KR:ko"
     feed = feedparser.parse(url)
     
@@ -185,33 +248,26 @@ def get_news(query, max_items=10):
             clean_title = title
             source = "알 수 없음"
             
-        published = entry.published if hasattr(entry, 'published') else "시간 정보 없음"
+        published = entry.published if hasattr(entry, 'published') else "시간 없음"
         
-        # 기본 이미지와 기본 요약값 설정
         image_url = None
         summary = "관련 기사 상세 내용은 제목을 클릭하여 확인하세요."
         
-        # RSS description에서 요약과 이미지 추출 (정교화)
         if hasattr(entry, 'description'):
             soup = BeautifulSoup(entry.description, 'html.parser')
-            
-            # 기사 자체의 이미지 추출 시도
             img_tag = soup.find('img')
             if img_tag and img_tag.get('src'):
                 image_url = img_tag['src']
             
-            # 구글 뉴스 RSS 특유의 잡음(제목 중복, 출처 중복 등) 제거
             raw_text = soup.get_text(separator=' ', strip=True)
             clean_text = raw_text.replace(title, "").replace(clean_title, "").replace(source, "").strip()
             clean_text = re.sub(r'^(.*?)[—|-]\s*', '', clean_text)
-            
             if len(clean_text) > 15:
                 summary = clean_text[:80] + "..."
         
-        # 기사 내 이미지가 없을 경우, 제목(clean_title)을 시드로 고정 랜덤 이미지 생성
         if not image_url:
+            # 기사 제목을 시드로 고정 랜덤 이미지 생성 (중복 방지)
             seed = hashlib.md5(clean_title.encode('utf-8')).hexdigest()
-            # picsum.photos를 사용하여 다채로운 배경 이미지 적용
             image_url = f"https://picsum.photos/seed/{seed}/400/200"
         
         news_list.append({
@@ -224,39 +280,38 @@ def get_news(query, max_items=10):
         })
     return news_list
 
-# 사이드바 설정
 with st.sidebar:
-    st.title("⚙️ 설정")
+    st.image("https://cdn-icons-png.flaticon.com/512/2965/2965306.png", width=60)
+    st.title("⚙️ 대시보드 설정")
     
-    st.write("🤖 **AI 요약 기능 활성화**")
-    api_key = st.text_input("Gemini API Key 입력", type="password", help="발급받은 구글 Gemini API 키를 입력하세요.")
+    st.markdown("### 🤖 AI 요약 기능")
+    api_key = st.text_input("Gemini API Key 입력", type="password", help="구글 Gemini API 키를 입력하면 3줄 요약이 활성화됩니다.")
     if not api_key:
-        st.info("🔑 키를 입력하면 뉴스 3줄 요약 버튼이 활성화됩니다.")
+        st.info("🔑 키를 입력하여 기사 요약 기능을 켜보세요.")
         
     st.divider()
     
-    st.write("원하시는 주제와 새로고침 주기를 설정하세요.")
+    st.markdown("### 🔄 업데이트 설정")
     refresh_minutes = st.slider("자동 새로고침 주기 (분)", min_value=1, max_value=60, value=5, step=1)
     
     st.divider()
     
-    # 기본 주제와 사용자 정의 키워드
-    all_topics = ["시사", "정치", "경제", "연예", "스포츠", "주식", "IT/과학", "부동산"]
-    selected_topics = st.multiselect("표시할 주제 선택", all_topics, default=["시사", "정치", "경제", "연예", "스포츠"])
+    st.markdown("### 📌 기본 뉴스 주제")
+    all_topics = ["시사", "정치", "경제", "연예", "스포츠", "IT/과학", "부동산", "세계"]
+    selected_topics = st.multiselect("표시할 카테고리 선택", all_topics, default=["시사", "정치", "경제", "연예", "스포츠"])
     
     st.divider()
-    st.write("✨ 원하는 키워드를 직접 입력해보세요. (최대 10개)")
+    st.markdown("### ✨ 맞춤형 키워드 모니터링")
+    st.caption("입력창에 키워드를 쓰면 아래에 새 칸이 나타납니다. (최대 10개)")
     
     if "num_kw_inputs" not in st.session_state:
         st.session_state.num_kw_inputs = 1
         
     custom_keywords = []
-    # 현재 활성화된 개수만큼 입력창 반복 생성
     for i in range(st.session_state.num_kw_inputs):
-        kw = st.text_input(f"키워드 추가 {i+1}", key=f"kw_input_{i}", placeholder="예: 올림픽, 인공지능, 애플")
-        if kw.strip():
-            if kw.strip() not in custom_keywords:
-                custom_keywords.append(kw.strip())
+        kw = st.text_input(f"키워드 {i+1}", key=f"kw_input_{i}", placeholder="예: 올림픽, 테슬라, 비트코인")
+        if kw.strip() and kw.strip() not in custom_keywords:
+            custom_keywords.append(kw.strip())
                 
     last_kw_val = st.session_state.get(f"kw_input_{st.session_state.num_kw_inputs - 1}", "")
     if last_kw_val.strip() != "" and st.session_state.num_kw_inputs < 10:
@@ -268,72 +323,95 @@ for kw in custom_keywords:
     if kw not in final_topics:
         final_topics.append(kw)
 
-# 자동 새로고침 설정 (밀리초 단위)
-refresh_interval = refresh_minutes * 60 * 1000
-st_autorefresh(interval=refresh_interval, key="data_refresh")
-
-# 메인 화면
-st.markdown(f"<h2>📰 실시간 종합 뉴스 대시보드 <span style='font-size:16px; font-weight:normal; color:gray;'>(마지막 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})</span></h2>", unsafe_allow_html=True)
+# 자동 새로고침 타이머
+st_autorefresh(interval=refresh_minutes * 60 * 1000, key="data_refresh")
 
 if not final_topics:
     st.warning("사이드바에서 하나 이상의 주제를 선택하거나 키워드를 입력해주세요.")
-else:
-    cols = st.columns(len(final_topics))
-    
-    # 열(컬럼) 반복문
-    for i, topic in enumerate(final_topics):
-        with cols[i]:
-            st.markdown(f"<div class='column-header'>{topic}</div>", unsafe_allow_html=True)
-            news_items = get_news(topic, max_items=15)
-            
-            with st.container(height=800, border=False):
-                if not news_items:
-                    st.info("뉴스를 불러오지 못했습니다.")
-                else:
-                    # 행(기사) 반복문
-                    for j, item in enumerate(news_items):
-                        card_html = f"""
-                        <div class="news-card">
-                            <img src="{item['image']}" class="news-image" alt="news thumbnail">
-                            <div class="news-content">
-                                <div class="news-title">
-                                    <a href="{item['link']}" target="_blank">{item['title']}</a>
-                                </div>
-                                <div class="news-summary">
-                                    {item['summary']}
-                                </div>
-                                <div class="news-meta">
-                                    <span>🏢 {item['source']}</span>
-                                    <span>🕒 {item['published'][5:16] if len(item['published']) > 16 else item['published']}</span>
-                                </div>
+    st.stop()
+
+# 메인 화면 구축을 위해 데이터를 먼저 수집합니다
+all_news_data = {topic: get_news(topic, max_items=15) for topic in final_topics}
+
+# 1. 헤더 (타이틀 및 시간)
+current_time = datetime.now().strftime('%Y년 %m월 %d일 %H:%M')
+st.markdown(f"""
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+        <h1 class="main-title">🌐 Live News Desk</h1>
+        <span style="color:#64748b; font-size:14px; font-weight:600;">마지막 업데이트: {current_time}</span>
+    </div>
+""", unsafe_allow_html=True)
+
+# 2. 실시간 주요 헤드라인 티커(전광판) 생성
+ticker_items = []
+for topic, items in all_news_data.items():
+    if items: # 각 주제별 가장 최신 뉴스 1개씩 추출
+        ticker_items.append(f"<strong>[{topic}]</strong> {items[0]['title']}")
+
+ticker_text = " &nbsp;&nbsp;&nbsp;✦&nbsp;&nbsp;&nbsp; ".join(ticker_items)
+
+if ticker_items:
+    st.markdown(f"""
+    <div class="ticker-wrap">
+        <div class="ticker-title">🔥 실시간 주요뉴스</div>
+        <div class="ticker-content">
+            <span>{ticker_text}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+cols = st.columns(len(final_topics))
+
+for i, topic in enumerate(final_topics):
+    with cols[i]:
+        # 뱃지 스타일 헤더
+        st.markdown(f"<div class='column-header'>{topic}</div>", unsafe_allow_html=True)
+        news_items = all_news_data[topic]
+        
+        with st.container(height=850, border=False):
+            if not news_items:
+                st.info("뉴스를 불러오지 못했습니다.")
+            else:
+                for j, item in enumerate(news_items):
+                    # 기사 카드 HTML
+                    card_html = f"""
+                    <div class="news-card">
+                        <img src="{item['image']}" class="news-image" alt="news thumbnail">
+                        <div class="news-content">
+                            <div class="news-title">
+                                <a href="{item['link']}" target="_blank">{item['title']}</a>
+                            </div>
+                            <div class="news-summary">
+                                {item['summary']}
+                            </div>
+                            <div class="news-meta">
+                                <span>🏢 {item['source']}</span>
+                                <span>🕒 {item['published'][5:16] if len(item['published']) > 16 else item['published']}</span>
                             </div>
                         </div>
-                        """
-                        st.markdown(card_html, unsafe_allow_html=True)
+                    </div>
+                    """
+                    st.markdown(card_html, unsafe_allow_html=True)
+                    
+                    # AI 요약 기능 영역
+                    if api_key:
+                        article_id = hashlib.md5(item['link'].encode('utf-8')).hexdigest()
+                        session_key = f"ai_summary_{article_id}"
                         
-                        # --- AI 요약 버튼 및 결과 표시 영역 ---
-                        if api_key:
-                            # 기사 URL을 기반으로 고유 ID 생성
-                            article_id = hashlib.md5(item['link'].encode('utf-8')).hexdigest()
-                            session_key = f"ai_summary_{article_id}"
-                            
-                            # 이미 요약된 결과가 있다면 바로 출력
-                            if session_key in st.session_state:
-                                st.info(st.session_state[session_key])
-                            else:
-                                # [핵심] 버튼 Key 중복 에러 방지: i(컬럼순서) + j(기사순서) + article_id 결합
-                                btn_key = f"btn_{i}_{j}_{article_id}"
-                                if st.button("✨ 이 기사 AI 3줄 요약", key=btn_key, use_container_width=True):
-                                    with st.spinner("원문을 읽고 요약 중입니다..."):
-                                        content = extract_article_text(item['link'])
-                                        if content:
-                                            summary_result = get_ai_summary(content, api_key)
-                                            # 요약 결과를 세션에 저장하여 재로딩시 유지
-                                            st.session_state[session_key] = summary_result
-                                            st.rerun() 
-                                        else:
-                                            st.warning("🚫 해당 언론사의 크롤링 방지 설정으로 인해 본문을 가져올 수 없습니다.")
-                        st.write("") # 카드 간의 간격 조정
-                        # --------------------------------------
+                        if session_key in st.session_state:
+                            st.success(st.session_state[session_key], icon="✨")
+                        else:
+                            # 고유 버튼 Key: i(컬럼순서) + j(기사순서) + article_id 결합으로 에러 완벽 차단
+                            btn_key = f"btn_{i}_{j}_{article_id}"
+                            if st.button("✨ 3줄 요약 보기", key=btn_key, use_container_width=True):
+                                with st.spinner("본문 분석 중..."):
+                                    content = extract_article_text(item['link'])
+                                    if content:
+                                        summary_result = get_ai_summary(content, api_key)
+                                        st.session_state[session_key] = summary_result
+                                        st.rerun() 
+                                    else:
+                                        st.error("보안 설정(봇 차단)으로 인해 원문 요약에 실패했습니다.", icon="🚫")
+                    st.write("") # 카드 간 간격
 
-st.markdown("<hr><p style='text-align:center; color:gray; font-size:12px;'>Data provided by Google News RSS. Not for commercial use.</p>", unsafe_allow_html=True)
+st.markdown("<hr><p style='text-align:center; color:#94a3b8; font-size:12px; margin-top:20px;'>Data provided by Google News RSS. Not for commercial use.</p>", unsafe_allow_html=True)
