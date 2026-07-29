@@ -1,11 +1,24 @@
-streamlit
-feedparser
+# 원고/이미지 생성 (Gemini, Pexels)
+google-genai
 requests
-beautifulsoup4
-google-generativeai
+
+# 실시간 뉴스 대시보드 (news_dashboard.py)
+streamlit
 streamlit-autorefresh
+feedparser
 qrcode
-Pillow
-newspaper3k
-lxml
-lxml_html_clean
+googlenewsdecoder
+
+# 트렌드 키워드 수집 (trend_keyword_fetcher.py)
+trendspyg
+beautifulsoup4
+
+# 네이버/티스토리 브라우저 자동화 (step4, step7)
+selenium
+pyperclip
+pywin32; platform_system == "Windows"
+
+# Blogger 공식 API (step5)
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
