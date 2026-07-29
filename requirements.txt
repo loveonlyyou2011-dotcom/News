@@ -4,3 +4,6 @@ streamlit-autorefresh
 beautifulsoup4
 requests
 google-generativeai
+qrcode
+pillow
+```eof
