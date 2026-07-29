@@ -4,6 +4,7 @@ from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 import re
 from bs4 import BeautifulSoup
+import hashlib
 
 # 페이지 기본 설정 (가로로 넓게 쓰기 위해 wide 모드 적용)
 st.set_page_config(page_title="실시간 뉴스 대시보드", page_icon="📰", layout="wide")
@@ -111,23 +112,6 @@ def get_news(query, max_items=10):
     url = f"https://news.google.com/rss/search?q={query}&hl=ko&gl=KR&ceid=KR:ko"
     feed = feedparser.parse(url)
     
-    # 주제별 맞춤형 고품질 기본 이미지 (Unsplash 사진 ID)
-    topic_images = {
-        "시사": "1585829365295-ab7cd400c167",     # 신문/뉴스룸
-        "정치": "1540914946210-6de8b560cb9a",     # 마이크
-        "경제": "1611974789855-9c2a0a7236a3",     # 차트
-        "연예": "1470229722913-7c090be1fb98",     # 콘서트/조명
-        "스포츠": "1461896836934-ffe607ba8211",   # 육상 트랙
-        "주식": "1590283603385-17ffb3a77196",     # 트레이딩 화면
-        "IT/과학": "1518770660439-4636190af475",  # 회로/기술
-        "부동산": "1560518883-ce09059eeffa"      # 고층 건물
-    }
-    
-    # 선택된 주제에 맞는 이미지가 없으면 사용할 범용 이미지
-    default_img_id = "1495020689067-958852a7765e" 
-    img_id = topic_images.get(query, default_img_id)
-    default_image_url = f"https://images.unsplash.com/photo-{img_id}?w=400&h=200&fit=crop"
-    
     news_list = []
     for entry in feed.entries[:max_items]:
         # HTML 태그 제거 및 데이터 정제
@@ -145,21 +129,43 @@ def get_news(query, max_items=10):
             
         published = entry.published if hasattr(entry, 'published') else "시간 정보 없음"
         
-        # BeautifulSoup을 사용하여 요약 텍스트 추출
-        summary = "관련 기사 상세 내용은 제목을 클릭하여 확인하세요."
+        # 이미지 & 요약 텍스트 추출 로직 개선
+        image_url = None
+        summary = "기사 원문에서 자세한 내용을 확인하세요."
+        
         if hasattr(entry, 'description'):
             soup = BeautifulSoup(entry.description, 'html.parser')
+            
+            # 1. 구글 뉴스 본문 내 썸네일 이미지 추출 시도
+            img_tag = soup.find('img')
+            if img_tag and img_tag.get('src'):
+                image_url = img_tag['src']
+            
+            # 2. 요약 텍스트 추출 (순수 텍스트만)
             text = soup.get_text(separator=' ', strip=True)
-            # 구글 뉴스 RSS는 제목이 설명에 중복 기재되므로, 일정 길이 이상일 때만 요약으로 간주
-            if len(text) > len(clean_title) + 5:
-                summary = text[:80] + "..." # 80자까지만 자르기
+            
+            # 구글 뉴스는 RSS description에 제목과 출처가 반복되므로 이를 제거
+            clean_text = text.replace(title, "").replace(clean_title, "").replace(source, "").strip()
+            
+            # 특수기호나 날짜 등 불필요한 앞부분 찌꺼기 제거 (예: "2026. 7. 29. — ")
+            clean_text = re.sub(r'^(.*?)[—|-]\s*', '', clean_text)
+            
+            # 의미 있는 요약 내용이 남아있다면 반영 (너무 짧으면 무시)
+            if len(clean_text) > 15:
+                summary = clean_text[:80] + "..." # 80자까지만 자르기
+        
+        # 3. 이미지가 없는 경우, 기사 제목을 바탕으로 고유한 랜덤 썸네일 할당
+        if not image_url:
+            # 기사 제목을 해시(Hash)값으로 변환하여 동일한 기사는 항상 동일한 이미지를 갖도록 고정
+            seed = hashlib.md5(clean_title.encode('utf-8')).hexdigest()
+            image_url = f"https://picsum.photos/seed/{seed}/400/200"
         
         news_list.append({
             "title": clean_title,
             "link": link,
             "source": source,
             "published": published,
-            "image": default_image_url, # RSS 자체 썸네일 대신 주제별 고화질 이미지 적용
+            "image": image_url,
             "summary": summary
         })
     return news_list
@@ -174,9 +180,18 @@ with st.sidebar:
     
     st.divider()
     
-    # 주제 설정 (에러 수정: all_topics 리스트에 '경제' 추가)
+    # 주제 설정 
     all_topics = ["시사", "정치", "경제", "연예", "스포츠", "주식", "IT/과학", "부동산"]
-    selected_topics = st.multiselect("표시할 주제 선택", all_topics, default=["시사", "정치", "경제", "연예", "스포츠"])
+    selected_topics = st.multiselect("기본 주제 선택", all_topics, default=["시사", "정치", "경제", "연예"])
+    
+    st.divider()
+    st.write("✨ 원하는 키워드를 직접 입력해보세요.")
+    custom_keyword = st.text_input("사용자 정의 키워드 추가", placeholder="예: 인공지능, 올림픽, 금리")
+
+# 최종적으로 화면에 표시할 주제 리스트 통합
+final_topics = list(selected_topics)
+if custom_keyword and custom_keyword.strip() not in final_topics:
+    final_topics.append(custom_keyword.strip())
 
 # 자동 새로고침 적용 (밀리초 단위로 변환)
 refresh_interval = refresh_minutes * 60 * 1000
@@ -185,14 +200,14 @@ st_autorefresh(interval=refresh_interval, key="data_refresh")
 # 메인 헤더
 st.markdown(f"<h2>📰 실시간 종합 뉴스 대시보드 <span style='font-size:16px; font-weight:normal; color:gray;'>(마지막 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})</span></h2>", unsafe_allow_html=True)
 
-if not selected_topics:
-    st.warning("사이드바에서 하나 이상의 주제를 선택해주세요.")
+if not final_topics:
+    st.warning("사이드바에서 하나 이상의 주제를 선택하거나 키워드를 입력해주세요.")
 else:
     # 패들렛 스타일을 위한 컬럼 생성 (선택한 주제 수만큼 컬럼 분할)
-    cols = st.columns(len(selected_topics))
+    cols = st.columns(len(final_topics))
     
     # 각 컬럼별로 주제 할당 및 뉴스 렌더링
-    for i, topic in enumerate(selected_topics):
+    for i, topic in enumerate(final_topics):
         with cols[i]:
             # 컬럼 헤더(주제명)
             st.markdown(f"<div class='column-header'>{topic}</div>", unsafe_allow_html=True)
