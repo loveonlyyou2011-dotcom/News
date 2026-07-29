@@ -94,16 +94,64 @@ st.markdown("""
 
 # ----------------- AI 및 크롤링 헬퍼 함수 -----------------
 def extract_article_text(url):
-    """주어진 URL에서 뉴스 본문 텍스트를 추출합니다."""
+    """주어진 URL에서 뉴스 본문 텍스트를 추출합니다 (리디렉션 및 크롤링 방지 우회 강화)."""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # 1. 봇 차단을 우회하기 위한 강력한 브라우저 헤더 설정
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Referer': 'https://news.google.com/'
+        }
         
+        # 세션을 사용하여 리디렉션 및 쿠키 유지
+        session = requests.Session()
+        response = session.get(url, headers=headers, timeout=10, allow_redirects=True)
+        response.encoding = response.apparent_encoding # 한글 깨짐 방지
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # 2. 구글 뉴스 리디렉션 페이지(메타 태그 자동 이동) 우회 처리
+        meta_refresh = soup.find('meta', attrs={'http-equiv': 'refresh'})
+        if meta_refresh:
+            redirect_url = meta_refresh.get('content', '').split('url=')[-1].strip("'\" ")
+            if redirect_url:
+                response = session.get(redirect_url, headers=headers, timeout=10, allow_redirects=True)
+                response.encoding = response.apparent_encoding
+                soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # a 태그 리디렉션 우회 (구글 뉴스의 "계속하려면 클릭" 페이지 처리)
+        if "news.google.com" in response.url or "consent.google.com" in response.url:
+            a_tag = soup.find('a', href=True)
+            if a_tag and 'http' in a_tag['href']:
+                response = session.get(a_tag['href'], headers=headers, timeout=10, allow_redirects=True)
+                response.encoding = response.apparent_encoding
+                soup = BeautifulSoup(response.text, 'html.parser')
+
+        # 3. 실제 기사 본문 텍스트 추출 (p 태그 위주)
         paragraphs = soup.find_all('p')
-        text = ' '.join([p.get_text() for p in paragraphs if len(p.get_text()) > 20])
-        return text[:3000] # API 토큰 제한 방지 (최대 3000자)
-    except:
+        text_chunks = [p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 30]
+        
+        # 본문이 p태그가 아닌 div 등에 있는 특이한 언론사를 위한 2차 추출(Fallback)
+        if len(text_chunks) < 3: 
+            article_divs = soup.find_all('div', id=re.compile(r'(article|content|news)', re.I)) or \
+                           soup.find_all('div', class_=re.compile(r'(article|content|news)', re.I))
+            for div in article_divs:
+                text = div.get_text(separator=' ', strip=True)
+                if len(text) > 100:
+                    text_chunks.append(text)
+
+        # 문장들을 하나로 합치고 불필요한 공백 제거
+        final_text = ' '.join(text_chunks)
+        final_text = re.sub(r'\s+', ' ', final_text) 
+        
+        # 텍스트가 너무 짧으면(기사를 못 가져왔다면) 실패 처리
+        if len(final_text) < 150:
+            return None
+            
+        return final_text[:3500] # API 토큰 제한 방지 (최대 3500자 반환)
+    except Exception as e:
+        # 에러 발생 시 로그를 남기지 않고 조용히 None 반환
         return None
 
 def get_ai_summary(text, key):
@@ -139,26 +187,31 @@ def get_news(query, max_items=10):
             
         published = entry.published if hasattr(entry, 'published') else "시간 정보 없음"
         
+        # 기본 이미지와 기본 요약값 설정
         image_url = None
         summary = "관련 기사 상세 내용은 제목을 클릭하여 확인하세요."
         
+        # RSS description에서 요약과 이미지 추출 (정교화)
         if hasattr(entry, 'description'):
             soup = BeautifulSoup(entry.description, 'html.parser')
             
+            # 기사 자체의 이미지 추출 시도
             img_tag = soup.find('img')
             if img_tag and img_tag.get('src'):
                 image_url = img_tag['src']
             
-            text = soup.get_text(separator=' ', strip=True)
-            clean_text = text.replace(title, "").replace(clean_title, "").replace(source, "").strip()
+            # 구글 뉴스 RSS 특유의 잡음(제목 중복, 출처 중복 등) 제거
+            raw_text = soup.get_text(separator=' ', strip=True)
+            clean_text = raw_text.replace(title, "").replace(clean_title, "").replace(source, "").strip()
             clean_text = re.sub(r'^(.*?)[—|-]\s*', '', clean_text)
             
             if len(clean_text) > 15:
                 summary = clean_text[:80] + "..."
         
-        # 이미지가 없을 경우 기사 제목(고유값)을 기반으로 랜덤 고정 이미지 부여
+        # 기사 내 이미지가 없을 경우, 제목(clean_title)을 시드로 고정 랜덤 이미지 생성
         if not image_url:
             seed = hashlib.md5(clean_title.encode('utf-8')).hexdigest()
+            # picsum.photos를 사용하여 다채로운 배경 이미지 적용
             image_url = f"https://picsum.photos/seed/{seed}/400/200"
         
         news_list.append({
@@ -187,8 +240,9 @@ with st.sidebar:
     
     st.divider()
     
+    # 기본 주제와 사용자 정의 키워드
     all_topics = ["시사", "정치", "경제", "연예", "스포츠", "주식", "IT/과학", "부동산"]
-    selected_topics = st.multiselect("기본 주제 선택", all_topics, default=["시사", "정치", "경제", "연예", "스포츠"])
+    selected_topics = st.multiselect("표시할 주제 선택", all_topics, default=["시사", "정치", "경제", "연예", "스포츠"])
     
     st.divider()
     st.write("✨ 원하는 키워드를 직접 입력해보세요.")
@@ -198,6 +252,7 @@ final_topics = list(selected_topics)
 if custom_keyword and custom_keyword.strip() not in final_topics:
     final_topics.append(custom_keyword.strip())
 
+# 자동 새로고침 설정 (밀리초 단위)
 refresh_interval = refresh_minutes * 60 * 1000
 st_autorefresh(interval=refresh_interval, key="data_refresh")
 
@@ -250,7 +305,7 @@ else:
                             if session_key in st.session_state:
                                 st.info(st.session_state[session_key])
                             else:
-                                # [핵심 수정 부분] 버튼 Key 중복 에러 해결: i(컬럼순서) + j(기사순서) + article_id 결합
+                                # [핵심] 버튼 Key 중복 에러 방지: i(컬럼순서) + j(기사순서) + article_id 결합
                                 btn_key = f"btn_{i}_{j}_{article_id}"
                                 if st.button("✨ 이 기사 AI 3줄 요약", key=btn_key, use_container_width=True):
                                     with st.spinner("원문을 읽고 요약 중입니다..."):
