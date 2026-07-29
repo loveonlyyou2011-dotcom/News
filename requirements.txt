@@ -6,4 +6,3 @@ requests
 google-generativeai
 qrcode
 pillow
-```eof
