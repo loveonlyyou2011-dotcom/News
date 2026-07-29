@@ -96,15 +96,13 @@ st.markdown("""
 def extract_article_text(url):
     """주어진 URL에서 뉴스 본문 텍스트를 추출합니다."""
     try:
-        # 크롤링 차단 방지를 위해 일반 브라우저처럼 User-Agent 설정
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         response = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # 기사 본문은 주로 <p> 태그 안에 있으므로 모두 수집
         paragraphs = soup.find_all('p')
         text = ' '.join([p.get_text() for p in paragraphs if len(p.get_text()) > 20])
-        return text[:3000] # API 토큰 제한을 위해 최대 3000자까지만 자르기
+        return text[:3000] # API 토큰 제한 방지 (최대 3000자)
     except:
         return None
 
@@ -112,13 +110,12 @@ def get_ai_summary(text, key):
     """Gemini API를 사용하여 텍스트를 3줄로 요약합니다."""
     try:
         genai.configure(api_key=key)
-        # 최신 가벼운 모델인 gemini-1.5-flash 사용
         model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = f"다음 뉴스 기사 본문을 읽고, 일반인도 이해하기 쉽게 핵심 내용만 정확하게 3줄로 요약해줘. 각 줄은 불릿기호(-)로 시작하게 해줘:\n\n{text}"
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"요약 실패 (API 키를 확인하거나 잠시 후 다시 시도해주세요): {str(e)}"
+        return f"요약 실패 (API 키 오류 또는 한도 초과): {str(e)}"
 # --------------------------------------------------------
 
 @st.cache_data(ttl=60) 
@@ -159,6 +156,7 @@ def get_news(query, max_items=10):
             if len(clean_text) > 15:
                 summary = clean_text[:80] + "..."
         
+        # 이미지가 없을 경우 기사 제목(고유값)을 기반으로 랜덤 고정 이미지 부여
         if not image_url:
             seed = hashlib.md5(clean_title.encode('utf-8')).hexdigest()
             image_url = f"https://picsum.photos/seed/{seed}/400/200"
@@ -177,11 +175,10 @@ def get_news(query, max_items=10):
 with st.sidebar:
     st.title("⚙️ 설정")
     
-    # API 키 입력창 추가
     st.write("🤖 **AI 요약 기능 활성화**")
-    api_key = st.text_input("Gemini API Key 입력", type="password", help="Google AI Studio에서 무료로 발급받은 API 키를 입력하세요.")
+    api_key = st.text_input("Gemini API Key 입력", type="password", help="발급받은 구글 Gemini API 키를 입력하세요.")
     if not api_key:
-        st.info("API 키를 입력하면 뉴스 요약 기능을 사용할 수 있습니다.")
+        st.info("🔑 키를 입력하면 뉴스 3줄 요약 버튼이 활성화됩니다.")
         
     st.divider()
     
@@ -195,7 +192,7 @@ with st.sidebar:
     
     st.divider()
     st.write("✨ 원하는 키워드를 직접 입력해보세요.")
-    custom_keyword = st.text_input("사용자 정의 키워드 추가", placeholder="예: 인공지능, 올림픽, 금리")
+    custom_keyword = st.text_input("사용자 정의 키워드 추가", placeholder="예: 올림픽, 인공지능, 애플")
 
 final_topics = list(selected_topics)
 if custom_keyword and custom_keyword.strip() not in final_topics:
@@ -212,6 +209,7 @@ if not final_topics:
 else:
     cols = st.columns(len(final_topics))
     
+    # 열(컬럼) 반복문
     for i, topic in enumerate(final_topics):
         with cols[i]:
             st.markdown(f"<div class='column-header'>{topic}</div>", unsafe_allow_html=True)
@@ -221,7 +219,8 @@ else:
                 if not news_items:
                     st.info("뉴스를 불러오지 못했습니다.")
                 else:
-                    for item in news_items:
+                    # 행(기사) 반복문
+                    for j, item in enumerate(news_items):
                         card_html = f"""
                         <div class="news-card">
                             <img src="{item['image']}" class="news-image" alt="news thumbnail">
@@ -243,22 +242,27 @@ else:
                         
                         # --- AI 요약 버튼 및 결과 표시 영역 ---
                         if api_key:
-                            article_id = hashlib.md5(item['title'].encode('utf-8')).hexdigest()
+                            # 기사 URL을 기반으로 고유 ID 생성
+                            article_id = hashlib.md5(item['link'].encode('utf-8')).hexdigest()
                             session_key = f"ai_summary_{article_id}"
                             
+                            # 이미 요약된 결과가 있다면 바로 출력
                             if session_key in st.session_state:
                                 st.info(st.session_state[session_key])
                             else:
-                                if st.button("✨ 이 기사 AI 3줄 요약", key=f"btn_{article_id}", use_container_width=True):
+                                # [핵심 수정 부분] 버튼 Key 중복 에러 해결: i(컬럼순서) + j(기사순서) + article_id 결합
+                                btn_key = f"btn_{i}_{j}_{article_id}"
+                                if st.button("✨ 이 기사 AI 3줄 요약", key=btn_key, use_container_width=True):
                                     with st.spinner("원문을 읽고 요약 중입니다..."):
                                         content = extract_article_text(item['link'])
                                         if content:
                                             summary_result = get_ai_summary(content, api_key)
+                                            # 요약 결과를 세션에 저장하여 재로딩시 유지
                                             st.session_state[session_key] = summary_result
                                             st.rerun() 
                                         else:
                                             st.warning("🚫 해당 언론사의 크롤링 방지 설정으로 인해 본문을 가져올 수 없습니다.")
-                        st.write("") 
+                        st.write("") # 카드 간의 간격 조정
                         # --------------------------------------
 
 st.markdown("<hr><p style='text-align:center; color:gray; font-size:12px;'>Data provided by Google News RSS. Not for commercial use.</p>", unsafe_allow_html=True)
