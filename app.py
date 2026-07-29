@@ -245,12 +245,28 @@ with st.sidebar:
     selected_topics = st.multiselect("표시할 주제 선택", all_topics, default=["시사", "정치", "경제", "연예", "스포츠"])
     
     st.divider()
-    st.write("✨ 원하는 키워드를 직접 입력해보세요.")
-    custom_keyword = st.text_input("사용자 정의 키워드 추가", placeholder="예: 올림픽, 인공지능, 애플")
+    st.write("✨ 원하는 키워드를 직접 입력해보세요. (최대 10개)")
+    
+    if "num_kw_inputs" not in st.session_state:
+        st.session_state.num_kw_inputs = 1
+        
+    custom_keywords = []
+    # 현재 활성화된 개수만큼 입력창 반복 생성
+    for i in range(st.session_state.num_kw_inputs):
+        kw = st.text_input(f"키워드 추가 {i+1}", key=f"kw_input_{i}", placeholder="예: 올림픽, 인공지능, 애플")
+        if kw.strip():
+            if kw.strip() not in custom_keywords:
+                custom_keywords.append(kw.strip())
+                
+    last_kw_val = st.session_state.get(f"kw_input_{st.session_state.num_kw_inputs - 1}", "")
+    if last_kw_val.strip() != "" and st.session_state.num_kw_inputs < 10:
+        st.session_state.num_kw_inputs += 1
+        st.rerun()
 
 final_topics = list(selected_topics)
-if custom_keyword and custom_keyword.strip() not in final_topics:
-    final_topics.append(custom_keyword.strip())
+for kw in custom_keywords:
+    if kw not in final_topics:
+        final_topics.append(kw)
 
 # 자동 새로고침 설정 (밀리초 단위)
 refresh_interval = refresh_minutes * 60 * 1000
