@@ -22,42 +22,64 @@ st.set_page_config(page_title="실시간 뉴스 대시보드", page_icon="📰",
 st.markdown("""
 <style>
     :root {
-        --bg: #F8FAFC; --card-bg: #ffffff; --card-border: #e2e8f0;
+        --bg: #F1F5F9; --card-bg: #ffffff; --card-border: #e2e8f0;
         --text-main: #0f172a; --text-sub: #64748b;
-        --badge-bg: #e0f2fe; --badge-text: #0369a1;
         --summary-bg: #f0fdf4; --summary-border: #22c55e; --summary-text: #166534;
         --placeholder-bg: linear-gradient(135deg, #e2e8f0, #f8fafc);
+        --brand: #6366f1;
     }
     @media (prefers-color-scheme: dark) {
         :root {
-            --bg: #0b1220; --card-bg: #111827; --card-border: #1f2937;
-            --text-main: #e5e7eb; --text-sub: #9ca3af;
-            --badge-bg: #0c2d48; --badge-text: #7dd3fc;
+            --bg: #0a0f1c; --card-bg: #131b2e; --card-border: #232f47;
+            --text-main: #e5e7eb; --text-sub: #94a3b8;
             --summary-bg: #052e1b; --summary-border: #22c55e; --summary-text: #86efac;
             --placeholder-bg: linear-gradient(135deg, #1f2937, #111827);
+            --brand: #818cf8;
         }
     }
-    .stApp { background-color: var(--bg); }
+    .stApp {
+        background:
+            radial-gradient(circle at 15% 0%, rgba(99,102,241,0.10), transparent 40%),
+            radial-gradient(circle at 85% 10%, rgba(236,72,153,0.08), transparent 35%),
+            var(--bg);
+    }
     .main-title {
-        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        background: linear-gradient(135deg, #4f46e5 0%, #ec4899 100%);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        font-weight: 900; font-size: 2.5rem; text-align: center; margin-bottom: 20px;
+        font-weight: 900; font-size: 2.6rem; text-align: center; margin-bottom: 2px; letter-spacing: -0.5px;
     }
+    .main-subtitle { text-align:center; color: var(--text-sub); margin-bottom: 22px; font-size: 0.95rem; }
+
+    /* 상단 실시간 티커: 좌우로 끊김없이 흐르는 마퀴 애니메이션 */
     .ticker-wrap {
-        background: #0f172a; color: #f8fafc; padding: 12px; border-radius: 8px;
-        margin-bottom: 25px; white-space: nowrap; overflow: hidden; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        background: linear-gradient(135deg, #0f172a, #1e1b4b);
+        border-radius: 10px; margin-bottom: 26px; overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.18); position: relative;
     }
+    .ticker-track {
+        display: inline-flex; white-space: nowrap; padding: 13px 0;
+        animation: ticker-scroll 22s linear infinite;
+    }
+    .ticker-wrap:hover .ticker-track { animation-play-state: paused; }
+    .ticker-item { color: #f8fafc; font-weight: 700; padding-right: 70px; }
+    @keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    @keyframes card-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
     .news-card {
-        background: var(--card-bg); border-radius: 16px; padding: 15px; margin-bottom: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.3s ease; border: 1px solid var(--card-border);
+        background: var(--card-bg); border-radius: 18px; padding: 16px; margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(15,23,42,0.06); transition: transform 0.25s ease, box-shadow 0.25s ease;
+        border: 1px solid var(--card-border); border-left: 4px solid var(--accent, var(--card-border));
+        animation: card-in 0.35s ease both;
     }
-    .news-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+    .news-card:hover { transform: translateY(-4px); box-shadow: 0 14px 28px rgba(15,23,42,0.12); }
     .topic-badge {
-        background-color: var(--badge-bg); color: var(--badge-text); padding: 8px 18px;
-        border-radius: 20px; font-weight: bold; font-size: 1.1rem; display: inline-block; margin-bottom: 15px;
+        padding: 8px 18px; border-radius: 999px; font-weight: 800; font-size: 1.05rem;
+        display: inline-block; margin-bottom: 15px; letter-spacing: -0.2px;
     }
-    .news-title { margin-top:0; font-size:1.1rem; line-height:1.4; color: var(--text-main); }
+    .news-title { margin-top:0; font-size:1.08rem; line-height:1.4; color: var(--text-main); font-weight: 700; }
     .news-meta { font-size:0.8rem; color: var(--text-sub); margin-bottom:10px; }
+    .news-link { text-decoration:none; color: var(--brand); font-weight:700; font-size: 0.92rem; }
     .news-img { width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--card-border); }
     .news-img-placeholder {
         width: 100%; height: 180px; border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--card-border);
@@ -68,9 +90,23 @@ st.markdown("""
         background-color: var(--summary-bg); border-left: 4px solid var(--summary-border);
         padding: 12px; border-radius: 4px; margin-top: 15px; font-size: 0.95rem; color: var(--summary-text); line-height: 1.5;
     }
+
+    /* 버튼을 좀 더 트렌디한 알약 모양으로 */
+    .stButton > button {
+        border-radius: 999px !important; font-weight: 600 !important;
+        border: 1px solid var(--card-border) !important; transition: all .18s ease !important;
+    }
+    .stButton > button:hover { border-color: var(--brand) !important; color: var(--brand) !important; transform: translateY(-1px); }
+
     @media (max-width: 768px) { .stColumn { width: 100% !important; display: block; } }
 </style>
 """, unsafe_allow_html=True)
+
+ACCENT_COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#22c55e", "#06b6d4", "#ef4444", "#a855f7", "#14b8a6"]
+
+
+def accent_for(index: int) -> str:
+    return ACCENT_COLORS[index % len(ACCENT_COLORS)]
 
 # 이미지가 전혀 없을 때 쓰는 순수 로컬 플레이스홀더 (외부 이미지 요청 없이 즉시 렌더링됨)
 NO_IMAGE_SVG = "data:image/svg+xml;utf8," + urllib.parse.quote(
@@ -138,12 +174,6 @@ def get_real_url_and_image(google_url: str):
         return real_url, NO_IMAGE_SVG, True
     img_url, is_placeholder = _fetch_thumbnail(real_url)
     return real_url, img_url, is_placeholder
-
-
-def resolve_topic_items(entries):
-    """토픽 안의 기사들을 병렬로 리졸브해서 체감 로딩 속도를 크게 줄인다."""
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        return list(executor.map(lambda e: get_real_url_and_image(e.link), entries))
 
 
 @st.cache_data(ttl=21600, show_spinner=False)
@@ -225,9 +255,25 @@ def stable_key(*parts) -> str:
     return hashlib.md5("|".join(parts).encode("utf-8")).hexdigest()[:12]
 
 
+def _remove_keyword(idx: int):
+    """키워드 삭제 콜백.
+
+    Streamlit의 text_input은 key가 같으면 서버 쪽 기본값(value=)이 바뀌어도 브라우저에
+    이미 그려진 입력창의 값을 그대로 들고 있는다. 그래서 중간 키워드를 지워 뒤 항목들의
+    인덱스가 당겨지면, 위젯이 새 값이 아니라 이전에 표시하던 값을 계속 보여주는 문제가 생긴다.
+    이를 막기 위해 삭제할 때마다 kw_version을 올려서 모든 입력창의 key를 바꾸고,
+    강제로 새 위젯을 처음부터 다시 그리게 한다.
+    """
+    keywords = st.session_state.keywords
+    st.session_state.keywords = [k for j, k in enumerate(keywords) if j != idx]
+    st.session_state.kw_version = st.session_state.get("kw_version", 0) + 1
+
+
 # ----------------- 사이드바 설정 -----------------
 if "keywords" not in st.session_state:
     st.session_state.keywords = ["시사", "경제", "IT/과학", "스포츠"]
+if "kw_version" not in st.session_state:
+    st.session_state.kw_version = 0
 if "bookmarks" not in st.session_state:
     st.session_state.bookmarks = {}  # key -> {title, url}
 
@@ -244,10 +290,34 @@ with st.sidebar:
     per_topic_count = st.slider("토픽당 기사 수", 3, 10, 5)
 
     st.divider()
-    st.subheader("🔍 키워드 설정 (콤마로 구분, 최대 10개)")
-    keywords_input = st.text_input("키워드", value=", ".join(st.session_state.keywords), label_visibility="collapsed")
-    final_topics = [k.strip() for k in keywords_input.split(",") if k.strip()][:10]
-    st.session_state.keywords = final_topics
+    st.subheader("🔍 키워드 설정 (최대 10개)")
+
+    current_keywords = st.session_state.keywords
+    kw_ver = st.session_state.kw_version
+    updated_keywords = []
+    for i, k in enumerate(current_keywords):
+        c1, c2 = st.columns([5, 1])
+        with c1:
+            val = st.text_input(
+                f"키워드 {i + 1}", value=k, key=f"kw_input_{kw_ver}_{i}",
+                label_visibility="collapsed", placeholder=f"키워드 {i + 1}",
+            )
+        with c2:
+            st.button(
+                "✕", key=f"kw_del_{kw_ver}_{i}", use_container_width=True, disabled=not k.strip(),
+                on_click=_remove_keyword, args=(i,),
+            )
+        if val.strip():
+            updated_keywords.append(val.strip())
+
+    if len(updated_keywords) < 10:
+        updated_keywords.append("")  # 입력 가능한 빈 칸을 항상 마지막에 하나 유지 (개수에 따라 자동으로 늘고 줆)
+
+    if updated_keywords != current_keywords:
+        st.session_state.keywords = updated_keywords
+        st.rerun()
+
+    final_topics = [k.strip() for k in st.session_state.keywords if k.strip()][:10]
 
     st.divider()
     st.subheader(f"⭐ 즐겨찾기 ({len(st.session_state.bookmarks)})")
@@ -272,41 +342,69 @@ with st.sidebar:
 st_autorefresh(interval=refresh_time * 60 * 1000, key="data_refresh")
 
 st.markdown("<h1 class='main-title'>🌐 실시간 종합 뉴스 대시보드</h1>", unsafe_allow_html=True)
+st.markdown("<p class='main-subtitle'>관심 키워드를 자동으로 추적해서 보여드려요</p>", unsafe_allow_html=True)
 
 if final_topics:
-    st.markdown(f"<div class='ticker-wrap'>🔥 실시간 주요뉴스: {' | '.join(final_topics)} ...업데이트 중</div>", unsafe_allow_html=True)
+    ticker_text = f"🔥 실시간 주요뉴스&nbsp;&nbsp;&nbsp;{'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(final_topics)}&nbsp;&nbsp;&nbsp;...업데이트 중"
+    st.markdown(f"""
+        <div class='ticker-wrap'>
+            <div class='ticker-track'>
+                <span class='ticker-item'>{ticker_text}</span>
+                <span class='ticker-item'>{ticker_text}</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # 토픽마다 따로 로딩 스피너를 띄우면 화면이 산만해지므로, 모든 토픽의 기사를 먼저 모아서
+    # 한 번에 병렬로 리졸브하고 로딩 표시도 한 번만 보여준다.
+    topic_entries = {}
+    all_entries = []
+    for topic in final_topics:
+        url = f"https://news.google.com/rss/search?q={urllib.parse.quote(topic)}&hl=ko&gl=KR&ceid=KR:ko"
+        feed = feedparser.parse(url)
+        entries = dedupe_entries(feed.entries)[:per_topic_count]
+        topic_entries[topic] = entries
+        all_entries.extend(entries)
+
+    unique_links = list(dict.fromkeys(e.link for e in all_entries))
+    with st.spinner("최신 기사를 불러오는 중..."):
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            resolved_list = list(executor.map(get_real_url_and_image, unique_links))
+    resolved_map = dict(zip(unique_links, resolved_list))
 
     num_cols = min(len(final_topics), 4)
     cols = st.columns(num_cols if num_cols > 0 else 1)
 
     for i, topic in enumerate(final_topics):
         col = cols[i % num_cols]
+        accent = accent_for(i)
         with col:
-            st.markdown(f"<div class='topic-badge'>📌 {topic}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div class='topic-badge' style='background:{accent}22; color:{accent};'>📌 {topic}</div>",
+                unsafe_allow_html=True,
+            )
 
-            url = f"https://news.google.com/rss/search?q={urllib.parse.quote(topic)}&hl=ko&gl=KR&ceid=KR:ko"
-            feed = feedparser.parse(url)
-            entries = dedupe_entries(feed.entries)[:per_topic_count]
+            entries = topic_entries[topic]
 
-            with st.spinner(f"'{topic}' 기사 불러오는 중..."):
-                resolved = resolve_topic_items(entries)
-
-            for j, (item, (real_url, img_url, is_placeholder)) in enumerate(zip(entries, resolved)):
+            for j, item in enumerate(entries):
+                real_url, img_url, is_placeholder = resolved_map[item.link]
                 key_id = stable_key(topic, item.link, str(j))
 
                 with st.container():
-                    st.markdown("<div class='news-card'>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='news-card' style='--accent:{accent};'>", unsafe_allow_html=True)
 
                     img_html = (
-                        f"<div class='news-img-placeholder'><img src='{img_url}' class='favicon-icon'></div>"
+                        f"<div class='news-img-placeholder'><img src='{img_url}' class='favicon-icon' "
+                        f"onerror=\"this.onerror=null;this.src='{NO_IMAGE_SVG}';\"></div>"
                         if is_placeholder else
-                        f"<img src='{img_url}' class='news-img'>"
+                        f"<img src='{img_url}' class='news-img' "
+                        f"onerror=\"this.onerror=null;this.parentElement.innerHTML='<div class=&quot;news-img-placeholder&quot;><img src=&quot;{NO_IMAGE_SVG}&quot; class=&quot;favicon-icon&quot;></div>';\">"
                     )
                     card_html = f"""
                         {img_html}
                         <h4 class='news-title'>{item.title}</h4>
                         <p class='news-meta'>🕒 {relative_time(item)}</p>
-                        <a href='{real_url}' target='_blank' style='text-decoration:none; color:#3b82f6; font-weight:bold;'>🔗 원문 기사 읽기</a>
+                        <a href='{real_url}' target='_blank' class='news-link'>🔗 원문 기사 읽기</a>
                     """
                     st.markdown(card_html, unsafe_allow_html=True)
 
