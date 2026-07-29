@@ -8,6 +8,7 @@ import requests
 import google.generativeai as genai
 import qrcode
 import urllib.parse
+import base64
 
 # ----------------- 페이지 설정 & 프리미엄 CSS -----------------
 st.set_page_config(page_title="실시간 뉴스 대시보드", page_icon="📰", layout="wide")
@@ -22,89 +23,89 @@ st.markdown("""
     }
     .ticker-wrap { 
         background: #0f172a; color: #f8fafc; padding: 12px; border-radius: 8px; 
-        margin-bottom: 25px; white-space: nowrap; overflow: hidden; 
-        font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+        margin-bottom: 25px; white-space: nowrap; overflow: hidden; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
     }
     .news-card { 
         background: white; border-radius: 16px; padding: 15px; margin-bottom: 20px; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.3s ease; 
-        border: 1px solid #e2e8f0; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.3s ease; border: 1px solid #e2e8f0; 
     }
     .news-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
     .topic-badge { 
         background-color: #e0f2fe; color: #0369a1; padding: 8px 18px; 
-        border-radius: 20px; font-weight: bold; font-size: 1.1rem; 
-        display: inline-block; margin-bottom: 15px; 
+        border-radius: 20px; font-weight: bold; font-size: 1.1rem; display: inline-block; margin-bottom: 15px; 
     }
+    /* 썸네일 비율 및 둥글기 최적화 */
     .news-img { width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 12px; border: 1px solid #f1f5f9; }
     .summary-box { 
         background-color: #f0fdf4; border-left: 4px solid #22c55e; 
-        padding: 12px; border-radius: 4px; margin-top: 15px; 
-        font-size: 0.95rem; color: #166534; line-height: 1.5;
+        padding: 12px; border-radius: 4px; margin-top: 15px; font-size: 0.95rem; color: #166534; line-height: 1.5;
     }
     @media (max-width: 768px) { .stColumn { width: 100% !important; display: block; } }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- AI 및 크롤링 헬퍼 함수 -----------------
+# ----------------- 스마트 크롤링 및 이미지 추출 -----------------
 
-@st.cache_data(ttl=600, show_spinner=False)
-def get_news_image(url, summary_html):
-    """실제 뉴스 기사의 썸네일(og:image)을 추출합니다."""
-    # 1. RSS 요약본 안에 이미지가 있다면 우선 사용
-    soup = BeautifulSoup(summary_html, 'html.parser')
-    img_tag = soup.find('img')
-    if img_tag and img_tag.get('src'):
-        return img_tag['src']
-        
-    # 2. 없으면 실제 뉴스 페이지로 접속하여 메타태그(og:image) 크롤링
+def decode_google_news_url(url):
+    """구글 뉴스 RSS 링크 안에 숨겨진 진짜 언론사 URL을 해독합니다."""
+    try:
+        match = re.search(r'(?:articles|read)/([^?]+)', url)
+        if match:
+            b64_str = match.group(1)
+            b64_str += '=' * (4 - len(b64_str) % 4) # Base64 패딩 맞추기
+            decoded_bytes = base64.urlsafe_b64decode(b64_str)
+            decoded_str = decoded_bytes.decode('latin1', errors='ignore')
+            
+            urls = re.findall(r'(https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s\x00-\x1f"\']*)?)', decoded_str)
+            for u in urls:
+                if 'news.google.com' not in u:
+                    return u
+    except: pass
+    return url
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_real_url_and_image(google_url):
+    """실제 기사 주소와 실제 썸네일 이미지를 추출합니다."""
+    real_url = decode_google_news_url(google_url)
+    img_url = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&q=80" # 기본 배경
+    
+    # 1. 만약 해독에 실패했다면 접속해서 추적
+    if real_url == google_url:
+        try:
+            res1 = requests.get(google_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+            soup1 = BeautifulSoup(res1.text, 'html.parser')
+            for a in soup1.find_all('a', href=True):
+                if a['href'].startswith('http') and 'google' not in a['href']:
+                    real_url = a['href']
+                    break
+        except: pass
+
+    # 2. 뚫어낸 '진짜 URL(KBS, 다음 등)'에 접속해서 썸네일(og:image) 가져오기
+    if real_url and 'google' not in real_url:
+        try:
+            res = requests.get(real_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}, timeout=5)
+            res.encoding = res.apparent_encoding
+            soup = BeautifulSoup(res.text, 'html.parser')
+            og_img = soup.find('meta', property='og:image')
+            
+            if og_img and og_img.get('content'):
+                val = og_img['content']
+                # 구글 기본 로고가 아닌 경우에만 썸네일로 인정
+                if 'ssl.gstatic.com' not in val and 'googleusercontent' not in val:
+                    if val.startswith('//'): img_url = 'https:' + val
+                    elif val.startswith('/'):
+                        parsed = urllib.parse.urlparse(real_url)
+                        img_url = f"{parsed.scheme}://{parsed.netloc}{val}"
+                    else: img_url = val
+        except: pass
+            
+    return real_url, img_url
+
+def extract_article_text(real_url):
+    """실제 URL에서 뉴스 본문을 추출합니다."""
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        session = requests.Session()
-        res = session.get(url, headers=headers, timeout=5, allow_redirects=True)
-        
-        # 구글 뉴스 리디렉션 뚫기
-        for _ in range(2):
-            if "news.google.com" in res.url or "consent.google.com" in res.url:
-                s_meta = BeautifulSoup(res.text, 'html.parser')
-                meta = s_meta.find('meta', attrs={'http-equiv': lambda x: x and x.lower() == 'refresh'})
-                if meta and 'url=' in meta.get('content', '').lower():
-                    next_url = re.split('url=', meta['content'], flags=re.IGNORECASE)[-1].strip("'\" ")
-                    res = session.get(next_url, headers=headers, timeout=5)
-                    continue
-                break
-                
-        s_final = BeautifulSoup(res.text, 'html.parser')
-        og_img = s_final.find('meta', property='og:image')
-        if og_img and og_img.get('content'):
-            return og_img['content']
-    except:
-        pass
-        
-    # 3. 모두 실패 시 기본 신문/뉴스 배경 이미지 (Unsplash)
-    return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&q=80"
-
-def extract_article_text(url):
-    """뉴스 본문 추출 (우회 로직 포함)"""
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://news.google.com/'}
-        session = requests.Session()
-        res = session.get(url, headers=headers, timeout=10, allow_redirects=True)
-        
-        for _ in range(2):
-            if "news.google.com" in res.url or "consent.google.com" in res.url:
-                soup = BeautifulSoup(res.text, 'html.parser')
-                meta = soup.find('meta', attrs={'http-equiv': lambda x: x and x.lower() == 'refresh'})
-                if meta and 'url=' in meta.get('content', '').lower():
-                    next_url = re.split('url=', meta['content'], flags=re.IGNORECASE)[-1].strip("'\" ")
-                    res = session.get(next_url, headers=headers, timeout=10)
-                    continue
-                a_tag = soup.find('a', href=True)
-                if a_tag and a_tag['href'].startswith('http'):
-                    res = session.get(a_tag['href'], headers=headers, timeout=10)
-                    continue
-                break
-                
+        res = requests.get(real_url, headers=headers, timeout=8)
         res.encoding = res.apparent_encoding
         soup = BeautifulSoup(res.text, 'html.parser')
         
@@ -189,8 +190,8 @@ if final_topics:
             feed = feedparser.parse(url)
             
             for j, item in enumerate(feed.entries[:5]):
-                # 💡 실제 기사 이미지 추출 적용!
-                actual_img_url = get_news_image(item.link, item.summary)
+                # 💡 마법이 일어나는 부분: 진짜 기사 주소와 실제 썸네일을 가져옴
+                real_url, actual_img_url = get_real_url_and_image(item.link)
                 
                 with st.container():
                     st.markdown("<div class='news-card'>", unsafe_allow_html=True)
@@ -199,19 +200,20 @@ if final_topics:
                         <img src='{actual_img_url}' class='news-img'>
                         <h4 style='margin-top:0; font-size:1.1rem; line-height:1.4;'>{item.title}</h4>
                         <p style='font-size:0.8rem; color:#64748b; margin-bottom:10px;'>{item.published}</p>
-                        <a href='{item.link}' target='_blank' style='text-decoration:none; color:#3b82f6; font-weight:bold;'>🔗 원문 기사 읽기</a>
+                        <a href='{real_url}' target='_blank' style='text-decoration:none; color:#3b82f6; font-weight:bold;'>🔗 원문 기사 읽기</a>
                     """
                     st.markdown(card_html, unsafe_allow_html=True)
                     
                     if api_key:
                         if st.button("✨ 이 기사 AI 3줄 요약", key=f"btn_{i}_{j}_{hash(item.title)}", use_container_width=True):
                             with st.spinner("본문을 분석 중입니다..."):
-                                article_text = extract_article_text(item.link)
+                                # 진짜 주소를 넘겨주기 때문에 크롤링 차단을 거의 완벽하게 회피함
+                                article_text = extract_article_text(real_url)
                                 
                                 if not article_text:
                                     fallback_text = BeautifulSoup(item.summary, "html.parser").get_text(separator=" ", strip=True)
                                     article_text = fallback_text
-                                    st.warning("🚫 보안 설정으로 본문 접근이 차단되어 기사 서두를 요약합니다.")
+                                    st.warning("🚫 보안 설정으로 서두를 요약합니다.")
                                 
                                 if article_text:
                                     summary_result = get_ai_summary(article_text, api_key)
